@@ -63,5 +63,20 @@ def test_compile_tf_graph_basic():
   result = run(*args)
 
 
+def test_compile_tf_graph_recurrent_step():
+  tmp_dir = tempfile.mkdtemp()
+  with open(os.path.join(tmp_dir, "returnn.config"), "wt") as config:
+    config.write(rec_decoder_config)
+  args = [
+    "tools/compile_tf_graph.py",
+    "--output_file",
+    os.path.join(tmp_dir, "graph.metatxt"),
+    "--rec_step_by_step",
+    "output",
+    os.path.join(tmp_dir, "returnn.config")
+  ]
+  result = run(*args)
+
+
 
 
