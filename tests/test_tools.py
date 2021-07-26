@@ -76,7 +76,3 @@ def test_compile_tf_graph_recurrent_step():
     os.path.join(tmp_dir, "returnn.config")
   ]
   result = run(*args)
-
-
-
-
