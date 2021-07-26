@@ -990,6 +990,8 @@ class _SubnetworkRecCell(object):
     self.parent_rec_layer = None  # type: typing.Optional[RecLayer]
     self.parent_net = parent_net
     self.net_dict = safe_deep_copy(net_dict)
+    self.rec_layer_name = rec_layer_name
+    self.parent_get_layer = parent_get_layer
     from returnn.tf.network import TFNetwork, ExternData, LossHolder
     self.net = TFNetwork(
       name="%s/%s(rec-subnet)" % (parent_net.name, rec_layer_name),
@@ -1039,6 +1041,8 @@ class _SubnetworkRecCell(object):
 
   def set_parent_layer(self, parent_rec_layer):
     """
+    Only called from RecLayer._get_cell to define itself as parent
+
     :param RecLayer parent_rec_layer:
     """
     assert parent_rec_layer.network is self.parent_net
