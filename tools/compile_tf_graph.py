@@ -644,11 +644,6 @@ class SubnetworkRecCellSingleStep(_SubnetworkRecCell):
     # Note that this would be wrong in beam search.
     self.net.get_global_batch_info().dim = rec_layer.get_batch_dim_from_state()
 
-    with tf.name_scope("cond"):
-      rec_layer.create_state_var("cond", tf.constant(True))
-      res = cond(i, net_vars, acc_tas, seq_len_info)
-      rec_layer.set_state_var_final_value("cond", res)
-
     with tf.name_scope("body"):
       res = body(i, net_vars, acc_tas, seq_len_info)
       assert len(res) == len(loop_vars)
