@@ -8495,3 +8495,154 @@ class RelativePositionalEncodingLayer(_ConcatInputLayer):
         kind=DimensionTag.Types.Spatial, description="%s_rel_pos_enc_time" % name, dimension=None)
       data = data.copy_template_new_dim_tags((dummy_dim_tag, time_dim_tag, feature_dim_tag))
     return data
+
+
+class CumConcatLayer(_ConcatInputLayer):
+  """
+  Concatenates all previous frames of a time-axis.
+  Like :class:`CumsumLayer` uses `sum`, this layer uses `concat`.
+
+  This layer expects to be inside a :class:`RecLayer`.
+
+  Inside a rec loop (not optimized out),
+  this will concatenate the current input
+  to the previous accumulated inputs.
+  For an input of shape `input_shape`,
+  it will output a tensor of shape `[new_dim] + input_shape`.
+  `new_dim` is a special dimension, usually of length `i`,
+  where `i` is the current loop frame,
+  i.e. the length increases in every loop frame.
+  `new_dim` is specified by a separate own dim tag.
+  For example, in the first frame,
+  this will be of shape `[1] + input_shape`,
+  in the second frame shape `[2] + input_shape`,
+  and so on,
+  and in the last frame shape `[T] + input_shape`.
+
+  Outside the rec loop (optimized out),
+  this layer expects an input with the time dim of the rec layer,
+  and returns the input as-is,
+  but replacing the time dim tag with the dim tag `new_dim`
+  converted as outside the loop.
+
+  Normally the optimization should not matter for the user,
+  i.e. for the user, the logical behavior is always as being inside the rec loop.
+  Outside the loop,
+  the output represents a tensor of shape `[T, new_dim] + input_shape`,
+  although we actually have another `new_dim` outside the loop,
+  and `T` is not actually there,
+  but we still have all the information,
+  because the last frame has all information.
+  """
+  layer_class = "cum_concat"
+  recurrent = True  # order matters
+
+  def __init__(self, new_dim, **kwargs):
+    """
+    :param DimensionTag new_dim:
+    """
+    super(CumConcatLayer, self).__init__(**kwargs)
+    assert self.network.is_inside_rec_layer()
+    out_axis = None
+    for a, tag in enumerate(self.output.dim_tags):
+      if tag == new_dim:
+        out_axis = a
+        break
+    assert out_axis is not None
+
+    if self.network.is_inside_rec_layer(inside_loop=True):
+      current_data = self.input_data.copy_compatible_to(self.output, unbroadcast=False)
+      current_frame = current_data.placeholder  # [B, 1, ..., D]
+      last_frames = self._rec_previous_layer.rec_vars_outputs["state"]  # [B, t, ..., D]
+      concat_frames = tf.concat([last_frames, current_frame], axis=out_axis)  # [B, t+1, ..., D]
+      self.rec_vars_outputs["state"] = concat_frames
+      self.output.placeholder = concat_frames
+
+      dyn_size = tf.broadcast_to(self.network.get_rec_step_index() + 1, [data.get_batch_dim()])
+
+    else:
+      # If not inside a rec loop, this layer is a no-op
+      self.output.placeholder = None  # TODO
+      data.size_placeholder = self.input_data.size_placeholder.copy()
+      dyn_size = tf.identity(data.get_dynamic_size(out_axis))
+
+    # We already set the size_placeholder to a dummy rec-history before, now do it properly
+    from returnn.tf.util.basic import DimensionTag
+    tag = DimensionTag(
+      description="rec-history:%s" % self.get_absolute_name(),
+      kind=DimensionTag.Types.Time)
+    data.size_placeholder[data.get_batch_axis_excluding_batch(out_axis)] = dyn_size
+    tag.set_tag_on_size_tensor(dyn_size)
+
+  @classmethod
+  def get_out_data_from_opts(cls, name, network, sources, new_dim, **kwargs):
+    """
+    :param str name:
+    :param returnn.tf.network.TFNetwork network:
+    :param list[LayerBase] sources:
+    :param DimensionTag new_dim:
+    :rtype: Data
+    """
+    rec_layer = network.get_rec_parent_layer(inside_loop=False)
+    assert rec_layer, "This must be inside the loop"
+    input_data = get_concat_sources_data_template(sources, name="%s_output" % name)
+    if network.is_inside_rec_layer(inside_loop=True):
+      # Currently SelectSearchSourcesLayer assumes that all rec_vars_outputs are batch-major.
+      # Therefore we here copy the input as batch-major, and then add the time axis at axis 1.
+      # In the future, when SelectSearchSourcesLayer has support for this, we can change this to operate on axis 0,
+      # which should be more efficient
+      out = input_data.copy_as_batch_major()
+      out = out.copy_add_dim_by_tag(new_dim, unbroadcast=True, axis=1)
+      # TODO set new_dim per spatial frame ...
+      return out
+
+    else:  # outside loop
+      out = input_data.copy_as_batch_major()
+      rec_time = rec_layer.output.get_time_dim_tag()
+      _matches = [i for (i, tag) in enumerate(out.dim_tags) if tag == rec_time]
+      assert len(_matches) == 1
+      out = out.copy_move_axis(_matches[0], 1)
+      # TODO use separate new_dim outside loop ...
+      out = out.copy_template_replace_dim_tag(axis=1, new_dim_tag=new_dim)
+      return out
+
+  # noinspection PyMethodOverriding
+  @classmethod
+  def get_rec_initial_extra_outputs(cls, network, batch_dim, rec_layer, sources, output, new_dim, **kwargs):
+    """
+    :param returnn.tf.network.TFNetwork network:
+    :param tf.Tensor batch_dim:
+    :param TFNetworkRecLayer.RecLayer|LayerBase rec_layer:
+    :param list[LayerBase] sources:
+    :param Data output:
+    :param DimensionTag new_dim:
+    :rtype: dict[str,tf.Tensor]
+    """
+    if network.is_inside_rec_layer():
+      shape = []
+      for tag in output.dim_tags:
+        if tag.is_batch_dim():
+          shape.append(batch_dim)
+        elif tag == new_dim:
+          shape.append(0)
+        elif tag.dimension is not None:
+          shape.append(tag.dimension)
+        else:
+          assert tag.dyn_size is not None
+          shape.append(tf.math.reduce_max(tag.dyn_size))
+      return {"state": tf.zeros(shape, dtype=output.dtype)}
+    else:
+      return {}
+
+  @classmethod
+  def get_rec_initial_extra_outputs_shape_invariants(cls, network, sources, output, **kwargs):
+    """
+    :param returnn.tf.network.TFNetwork network:
+    :param list[LayerBase] sources:
+    :param Data output:
+    :rtype: dict[str, tf.TensorShape]
+    """
+    if network.is_inside_rec_layer():
+      return {"state": tf.TensorShape(output.batch_shape)}
+    else:
+      return {}
