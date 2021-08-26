@@ -8543,12 +8543,7 @@ class CumConcatLayer(_ConcatInputLayer):
     """
     super(CumConcatLayer, self).__init__(**kwargs)
     assert self.network.is_inside_rec_layer()
-    out_axis = None
-    for a, tag in enumerate(self.output.dim_tags):
-      if tag == new_dim:
-        out_axis = a
-        break
-    assert out_axis is not None
+    out_axis = self.output.get_axis_from_description(new_dim)
 
     if self.network.is_inside_rec_layer(inside_loop=True):
       current_data = self.input_data.copy_compatible_to(self.output, unbroadcast=False)
@@ -8584,7 +8579,13 @@ class CumConcatLayer(_ConcatInputLayer):
     :rtype: Data
     """
     rec_layer = network.get_rec_parent_layer(inside_loop=False)
-    assert rec_layer, "This must be inside the loop"
+    assert rec_layer, "CumConcatLayer %r must be used inside a RecLayer" % name
+    new_dim_base = new_dim.get_same_base()
+    if new_dim_base.per_spatial_frame is None:
+      new_dim_base.per_spatial_frame = rec_layer.time_dim_tag
+    else:
+      assert new_dim_base.per_spatial_frame == rec_layer.time_dim_tag
+
     input_data = get_concat_sources_data_template(sources, name="%s_output" % name)
     if network.is_inside_rec_layer(inside_loop=True):
       # Currently SelectSearchSourcesLayer assumes that all rec_vars_outputs are batch-major.
@@ -8592,19 +8593,20 @@ class CumConcatLayer(_ConcatInputLayer):
       # In the future, when SelectSearchSourcesLayer has support for this, we can change this to operate on axis 0,
       # which should be more efficient
       out = input_data.copy_as_batch_major()
-      out = out.copy_add_dim_by_tag(new_dim, unbroadcast=True, axis=1)
-      # TODO set new_dim per spatial frame ...
+      out = out.copy_add_dim_by_tag(new_dim_base, unbroadcast=True, axis=1)
       return out
 
     else:  # outside loop
-      out = input_data.copy_as_batch_major()
-      rec_time = rec_layer.output.get_time_dim_tag()
-      _matches = [i for (i, tag) in enumerate(out.dim_tags) if tag == rec_time]
-      assert len(_matches) == 1
-      out = out.copy_move_axis(_matches[0], 1)
-      # TODO use separate new_dim outside loop ...
-      out = out.copy_template_replace_dim_tag(axis=1, new_dim_tag=new_dim)
-      return out
+      if not new_dim_base.per_spatial_frame_accumulated:
+        new_dim_accum = DimensionTag(
+          kind=new_dim_base.kind, description="%s:accumulated" % name)
+        new_dim_accum.same_as = new_dim_base
+        new_dim_base.per_spatial_frame_accumulated = new_dim_accum
+      else:
+        new_dim_accum = new_dim_base.per_spatial_frame_accumulated
+      # Assume that the input has the time dim from the rec layer.
+      axis = input_data.get_axis_from_description(rec_layer.time_dim_tag)
+      return input_data.copy_template_replace_dim_tag(axis=axis, new_dim_tag=new_dim_accum)
 
   # noinspection PyMethodOverriding
   @classmethod
