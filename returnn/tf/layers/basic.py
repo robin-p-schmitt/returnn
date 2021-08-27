@@ -5537,7 +5537,7 @@ class DotLayer(LayerBase):
       dim_tags=dim_tags,
       time_dim_axis=time_dim_axis,
       dtype=a_out.dtype,
-      batch=BatchInfo.get_common_batch_info([src.batch for src in (a_out, b_out) if src.batch]),
+      batch=BatchInfo.get_common_batch_info([src.batch for src in (a_out, b_out)]),
       beam=SearchBeam.get_combined_beam(a_out.beam, b_out.beam))
 
 
