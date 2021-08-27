@@ -2891,6 +2891,9 @@ class Data(object):
     # the first usage should hopefully define the correct beam.
     if getattr(sizes, "_RETURNN_dyn_size_beam", NotSpecified) is NotSpecified:
       sizes._RETURNN_dyn_size_beam = self.beam
+    # TODO this code should be more generic...
+    #   need to catch Data.batch / Data.beam assign (disallow?)
+    #   need to convert initial dim tags to right batch/beam
     if self.beam and getattr(sizes, "_RETURNN_dyn_size_beam", None) != self.beam:
       from returnn.tf.util import basic as tf_util
       tag = DimensionTag.get_tag_from_size_tensor(sizes)
