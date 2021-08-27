@@ -4019,9 +4019,10 @@ def test_subnetwork_unused_output():
       'sub': {
         'class': 'subnetwork',
         'from': [],
-        'subnetwork': {'linear': {'class': 'linear', 'from': 'base:data:data', 'n_out': 1},
-        'linear_0': {'class': 'linear', 'from': 'linear', 'n_out': 1},
-        'output': {'class': 'copy', 'from': 'linear'}}},
+        'subnetwork': {
+          'linear': {'class': 'linear', 'from': 'base:data:data', 'n_out': 1},
+          'linear_0': {'class': 'linear', 'from': 'linear', 'n_out': 1},
+          'output': {'class': 'copy', 'from': 'linear'}}},
       'linear': {'class': 'linear', 'from': ['sub/linear', 'sub/linear_0'], 'n_out': 1},
       'output': {'class': 'copy', 'from': 'linear'}}
     config = Config()
