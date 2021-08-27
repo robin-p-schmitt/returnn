@@ -3482,6 +3482,43 @@ def test_reclayer_optimize_out_dot():
     rtol=1e-3)
 
 
+def test_reclayer_optimize_out_dot_consistent_axes():
+  # https://github.com/rwth-i6/returnn/issues/569
+  # Used for multi-head dot-attention.
+  n_heads = 4
+  n_key = 5
+  n_value = 7
+  n_key_total = n_heads * n_key
+  n_value_total = n_heads * n_value
+  check_reclayer_optimize_out(
+    {"class": "linear", "activation": None, "from": "att"},
+    other_subnet_layers={
+      "s": {"class": "linear", "activation": None, "with_bias": False, "from": "data:source",
+            "n_out": n_key_total},  # (B, D)  -- Q (query). D should be same as enc_ctx
+      "att_query": {"class": "split_dims", "axis": "F", "dims": (n_heads, n_key), "from": "s"},  # (B, H, D/H)
+      # Here is the main test, the dot-layer:
+      "energy": {"class": "dot", "red1": -1, "red2": -1, "var1": "T", "var2": "T",
+                 "from": ["base:enc_ctx", "att_query"]},
+      # energy inside the loop will be (B, H, enc-T, 1).
+      # energy outside the loop will be (B, H, enc-T, dec-T). I.e. enc-T is still the first time axis.
+      "att_weights": {"class": "softmax_over_spatial", "from": "energy"},  # (B, enc-T, H, 1)
+      "att0": {"class": "generic_attention", "weights": "att_weights", "base": "base:enc_value"},  # (B, H, V)
+      "att": {"class": "merge_dims", "axes": "static", "from": "att0"},  # (B, H*V); Use "static" here.
+      },
+    shared_base_net={
+      "encoder": {"class": "copy", "from": "data"},
+      "enc_ctx0": {"class": "linear", "activation": None, "with_bias": False, "from": "encoder",
+                   "n_out": n_key_total},  # (B, enc-T, D)
+      "enc_ctx": {"class": "split_dims", "axis": "F", "dims": (n_heads, n_key),
+                  "from": "enc_ctx0", "is_output_layer": True},  # (B, enc-T, H, D/H)
+      "enc_value0": {"class": "linear", "activation": None, "with_bias": False, "from": "encoder",
+                     "n_out": n_value_total},
+      "enc_value": {"class": "split_dims", "axis": "F", "dims": (n_heads, n_value),
+                    "from": "enc_value0", "is_output_layer": True},  # (B, enc-T, H, D/H)
+    },
+    rtol=1e-3)
+
+
 def test_reclayer_optimize_out_dot_kv_in_rec():
   # Same as test_reclayer_optimize_out_dot, but with the att key/value layers declared INSIDE the rec layer.
   AttNumHeads = 4
