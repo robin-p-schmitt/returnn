@@ -1175,8 +1175,10 @@ class Data(object):
       else:
         dtype = "float32"
     self.dtype = dtype  # type: str
-    self.batch = batch
-    self.beam = beam
+    if beam and batch:
+      assert batch.beam == beam
+    self._batch = batch
+    self._beam = beam
     if isinstance(dim_tags, (tuple, list)):
       # We do a couple of sanity checks, and maybe set special axes attribs.
       shape_ = tuple(tag.dimension for tag in dim_tags if not tag.is_batch_dim())
@@ -1257,6 +1259,7 @@ class Data(object):
           base_tag.declare_same_as(_dim_tag)
           if _dim_tag.dyn_size is not None:
             self.set_dynamic_size(_axis, _dim_tag.dyn_size)
+    self._adapt_batch_consistent_dim_tags()
     self.sanity_check(assume_complete=False)
 
   @classmethod
@@ -1530,6 +1533,13 @@ class Data(object):
 
   def __hash__(self):
     return id(self)
+
+  def _adapt_batch_consistent_dim_tags(self):
+    if not self.batch:
+      return
+    dim_tags = list(self.dim_tags)
+    for i, tag in enumerate(dim_tags):
+      pass  # TODO. but cache computation/dim tag. maybe base dim tag should have derived_by_batch or so
 
   def copy(self, name=None):
     """
@@ -2507,6 +2517,43 @@ class Data(object):
     """
     self._placeholder = value
     self.sanity_check(assume_complete=False)
+
+  @property
+  def batch(self):
+    """
+    :rtype: BatchInfo|None
+    """
+    return self._batch
+
+  @batch.setter
+  def batch(self, batch):
+    """
+    :param BatchInfo batch:
+    """
+    assert batch.beam == self.beam
+    self._batch = batch
+    self._adapt_batch_consistent_dim_tags()
+
+  @property
+  def beam(self):
+    """
+    :rtype: SearchBeam|None
+    """
+    if self._beam:
+      return self._beam
+    if self._batch:
+      return self._batch.beam
+    return None
+
+  @beam.setter
+  def beam(self, beam):
+    """
+    :param SearchBeam|None beam:
+    """
+    # No check for batch.beam, as the batch is usually set only later.
+    self._beam = beam
+    if self.batch:
+      self.batch = self.batch.copy_set_beam(beam=beam)
 
   def time_dimension(self):
     """

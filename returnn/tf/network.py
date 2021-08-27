@@ -953,9 +953,9 @@ class TFNetwork(object):
           if not output_template.batch:
             # Some heuristic for now to fix missing batch info. We should try to fix get_out_data_from_opts though...
             if LayerBase.get_global_layer_list():
-              output_template.batch = LayerBase.get_recent_layer().get_batch_info()
+              output_template.batch = LayerBase.get_recent_layer().get_batch_info().copy_set_beam(output_template.beam)
             elif self.extern_data.data:
-              output_template.batch = self.extern_data.get_batch_info()
+              output_template.batch = self.extern_data.get_batch_info().copy_set_beam(output_template.beam)
             else:
               # No layers at all yet. This implies that the output must already have a placeholder.
               assert output_template.placeholder is not None and not output_template.beam
