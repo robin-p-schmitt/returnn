@@ -2066,9 +2066,9 @@ class Data(object):
     assert data.beam is None, "incompatible beam (%r vs %r)" % (data.beam, beam)
     if beam is None:
       return data
+    data.beam = beam
     if data.batch:
       data.batch = data.batch.copy_set_beam(beam)
-    data.beam = beam
     with tf.name_scope("%s_data_extend_with_beam" % get_valid_scope_name_from_str(self.name)):
       if data.placeholder is not None:
         with same_control_flow_ctx(data.placeholder):
@@ -2528,9 +2528,10 @@ class Data(object):
   @batch.setter
   def batch(self, batch):
     """
-    :param BatchInfo batch:
+    :param BatchInfo|None batch:
     """
-    assert batch.beam == self.beam
+    if batch:
+      assert batch.beam == self.beam
     self._batch = batch
     self._adapt_batch_consistent_dim_tags()
 
@@ -2552,8 +2553,8 @@ class Data(object):
     """
     # No check for batch.beam, as the batch is usually set only later.
     self._beam = beam
-    if self.batch:
-      self.batch = self.batch.copy_set_beam(beam=beam)
+    if self._batch:
+      self._batch = self._batch.copy_set_beam(beam=beam)
 
   def time_dimension(self):
     """
@@ -3287,19 +3288,22 @@ class Data(object):
     :param bool ignore_feature_dim: when set, the feature dim does not have to match in the sources
     :return: some generic data where the sources should be compatible to (with copy_compatible_to),
       i.e. it contains the union of all axes from all sources (least common multiple).
+      This is always a template, and a new copy.
     :rtype: Data|None
     """
     if not sources:
       return None
     assert sources
     if len(sources) == 1:
-      return sources[0]
+      return sources[0].copy_template()
     max_ndim = max([s.batch_ndim for s in sources])
     common_batch = BatchInfo.get_common_batch_info([src.batch for src in sources if src.batch])
     # Try with the (first) largest.
     common = [s for s in sources if s.batch_ndim == max_ndim][0]
-    common = common.copy()
-    common.batch = common_batch  # no copy_ext_batch because we don't want TF ops
+    common = common.copy_template()
+    common.beam = None  # this will be reset
+    if common_batch:
+      common.batch = common_batch.copy_set_beam(None)  # the beam will be reset
     if any([s.beam for s in sources]):
       # Note: we don't use copy_extend_with_beam because we don't want to create any ops in the TF graph at this point.
       common.beam = SearchBeam.get_combined_beam(*[s.beam for s in sources])
