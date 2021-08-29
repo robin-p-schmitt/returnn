@@ -934,8 +934,7 @@ class TFNetwork(object):
     """
     from pprint import pprint
     from returnn.util.basic import help_on_type_error_wrong_args
-    from returnn.tf.util.basic import py_print, get_shape_dim
-    from returnn.tf.util.data import BatchInfo
+    from returnn.tf.util.basic import py_print
     layer_desc = self._create_layer_layer_desc(name=name, layer_desc=layer_desc, template=False)
     debug_print_layer_output_template = self.get_config().bool("debug_print_layer_output_template", False)
     debug_print_layer_output_shape = self.get_config().bool("debug_print_layer_output_shape", False)
