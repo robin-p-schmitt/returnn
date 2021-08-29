@@ -3162,10 +3162,11 @@ def test_RnnCellLayer_with_time():
         batch_dim=1, name="prev_l", n_out=10, unit="LSTMBlock")
       print("Previous time layer:", prev_l)
     with tf_compat.v1.variable_scope("l1"):
-      l1 = RnnCellLayer(
-        name="l1",
-        n_out=10, output=Data(name="l1", shape=(None, 10), time_dim_axis=0),
+      opts = dict(
+        name="l1", n_out=10,
         unit="LSTMBlock", network=net, rec_previous_layer=prev_l, sources=[input_no_time_l])
+      opts["output"] = RnnCellLayer.get_out_data_from_opts(**opts)
+      l1 = RnnCellLayer(**opts)
       print("RnnCell layer (no time):", l1)
       print("RnnCell layer (no time) params:", l1.params)
       assert l1.output.time_dim_axis is None
@@ -3173,15 +3174,18 @@ def test_RnnCellLayer_with_time():
       assert l1.output.dim == 10
       assert l1.output.shape == (10,)
     with tf_compat.v1.variable_scope("data"):
-      input_l = SourceLayer(network=net, name="data")
+      opts = dict(network=net, name="data")
+      opts["output"] = SourceLayer.get_out_data_from_opts(**opts)
+      input_l = SourceLayer(**opts)
       print("Input layer (with time-dim):", input_l)
       assert input_l.output.dim == input_no_time_l.output.dim
       assert input_l.output.shape == (None, input_l.output.dim)
       assert input_l.output.time_dim_axis == 1
       assert not input_l.output.sparse
     with tf_compat.v1.variable_scope("l2"):
-      l2 = RnnCellLayer(
-        n_out=10, unit="LSTMBlock", network=net, name="l2", sources=[input_l])
+      opts = dict(name="l2", n_out=10, unit="LSTMBlock", network=net, sources=[input_l])
+      opts["output"] = RnnCellLayer.get_out_data_from_opts(**opts)
+      l2 = RnnCellLayer(**opts)
       print("RnnCell layer (with time):", l2)
       print("RnnCell layer (with time) params:", l2.params)
       assert l2.output.time_dim_axis == 0
