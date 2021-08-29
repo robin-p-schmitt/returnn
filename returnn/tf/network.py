@@ -949,19 +949,7 @@ class TFNetwork(object):
         output_template = layer_desc["output"]
         assert isinstance(output_template, Data), "%s %r layer_desc %r ['output'] is not a Data instance" % (
           layer_class.__name__, name, layer_desc)
-        if output_template.have_batch_axis():
-          if not output_template.batch:
-            # Some heuristic for now to fix missing batch info. We should try to fix get_out_data_from_opts though...
-            if LayerBase.get_global_layer_list():
-              output_template.batch = LayerBase.get_recent_layer().get_batch_info().copy_set_beam(output_template.beam)
-            elif self.extern_data.data:
-              output_template.batch = self.extern_data.get_batch_info().copy_set_beam(output_template.beam)
-            else:
-              # No layers at all yet. This implies that the output must already have a placeholder.
-              assert output_template.placeholder is not None and not output_template.beam
-              output_template.batch = BatchInfo.make_global_batch_info(
-                batch_dim=get_shape_dim(output_template.placeholder, output_template.batch_dim_axis, name="batch_dim"))
-          output_template.batch = output_template.batch.copy_set_beam(output_template.beam)
+        output_template = layer_class.fixup_out_data(output_template, network=self)
         print(
           "layer %s/%r output: %r" % (self.name, name, output_template),
           file=log.v1 if debug_print_layer_output_template else log.v3)
