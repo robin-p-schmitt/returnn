@@ -269,9 +269,8 @@ class LayerBase(object):
         network=network, mark_data_key_as_used=False).dim
     if n_out is not NotSpecified:
       assert out_type["dim"] == n_out
-    sources_data = None
-    if sources and sources[0]:
-      sources_data = sources[0].output.copy_template()
+    sources_data_list = [src.output for src in sources if src]
+    sources_data = Data.get_common_data(sources_data_list, ignore_feature_dim=True) if sources_data_list else None
     if sources_data and not sources_data.sparse and not out_type.get("sparse", False):
       out_type.setdefault("dtype", sources_data.dtype)
     # You are supposed to set self.output.{batch_dim_axis,time_dim_axis} explicitly,
@@ -312,14 +311,10 @@ class LayerBase(object):
         else:
           out_type.setdefault("shape", (out_type.get("dim", None),))
     # Note: No special handling for feature_dim_axis here for now...
-    batch = None
-    beam = None
-    for src in sources:
-      if src:  # might be None if template construction
-        batch = BatchInfo.get_common_batch_info([batch, src.output.batch])
-        beam = SearchBeam.get_combined_beam(beam, src.output.beam)
-    out_type.setdefault("batch", batch)
-    out_type.setdefault("beam", beam)
+    if sources_data and sources_data.batch:
+      out_type.setdefault("batch", sources_data.batch)
+    if sources_data and sources_data.beam:
+      out_type.setdefault("beam", sources_data.beam)
     output = Data(**out_type)
     cls._post_init_output(
       output=output, network=network, target=target, size_target=size_target, _target_layers=_target_layers,
