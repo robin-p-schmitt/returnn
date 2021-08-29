@@ -3927,7 +3927,7 @@ class RnnCellLayer(_ConcatInputLayer):
     sources_data = Data.get_common_data([src.output for src in sources if src], ignore_feature_dim=True)
     feat = DimensionTag(kind=DimensionTag.Types.Feature, description="%s:rnn_cell_feat" % name, dimension=n_out)
     if sources_data and sources_data.have_time_axis():
-      dim_tags = (sources_data.get_batch_dim_tag(), sources_data.get_time_dim_tag(), feat)
+      dim_tags = (sources_data.get_time_dim_tag(), sources_data.get_batch_dim_tag(), feat)
       batch_dim_axis = 1
       time_dim_axis = 0
     else:
