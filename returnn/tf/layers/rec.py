@@ -8634,7 +8634,7 @@ class CumConcatLayer(_ConcatInputLayer):
       if not new_dim_base.per_spatial_frame_accumulated:
         new_dim_accum = DimensionTag(
           kind=new_dim_base.kind, description="%s:accumulated" % name)
-        new_dim_accum.same_as = new_dim_base
+        new_dim_accum.declare_same_as(new_dim_base)
         new_dim_base.per_spatial_frame_accumulated = new_dim_accum
       else:
         new_dim_accum = new_dim_base.per_spatial_frame_accumulated
