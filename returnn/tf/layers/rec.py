@@ -1959,6 +1959,7 @@ class _SubnetworkRecCell(object):
         fixed_seq_len = input_seq_len
       if fixed_seq_len is not None:
         time_dim_tag = DimensionTag.get_tag_from_size_tensor(fixed_seq_len)
+        assert time_dim_tag is self.time_dim_tag
         with tf.name_scope("check_seq_len_batch_size"):
           fixed_seq_len = check_input_dim(
             fixed_seq_len, axis=0, dim=batch_dim * (input_beam.beam_size if input_beam else 1))
@@ -1970,6 +1971,7 @@ class _SubnetworkRecCell(object):
         assert "end" in self.layer_data_templates, "length not defined, provide 'end' layer"
         max_seq_len = None
         have_known_seq_len = False
+        assert self.time_dim_tag.dyn_size is None  # not yet set
       if time_dim_tag:
         self.time_dim_tag.declare_same_as(time_dim_tag)
       else:
