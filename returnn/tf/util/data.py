@@ -3083,6 +3083,7 @@ class Data(object):
         if new_tag is not tag:
           self._dim_tags = self.dim_tags[:axis] + (new_tag,) + self.dim_tags[axis + 1:]
     else:
+      # TODO still allow this?
       # Reset to some new size.
       # Use new dim tag, or previous existing attached to size.
       assert sizes_tag, "%s: assign dyn sizes %s without defined dim tag" % (self, sizes)
