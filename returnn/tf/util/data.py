@@ -1439,8 +1439,11 @@ class Data(object):
           checks += [tf.Assert(
             # Note: in almost all cases, we have equality here.
             # However, not strictly in all cases, e.g. DecideLayer, maybe some others...
+            # But that should not be more than 1 less.
             tf.logical_or(
-              tf.less_equal(tf.reduce_max(dyn_size), shape[i]),
+              tf.logical_and(
+                tf.less_equal(tf.reduce_max(dyn_size), shape[i]),
+                tf.greater_equal(tf.reduce_max(dyn_size), shape[i] - 1)),
               # In other rare cases, this might be a broadcast dim
               # (e.g. as initial values of att weights for a rec loop).
               tf.equal(1, shape[i])),
