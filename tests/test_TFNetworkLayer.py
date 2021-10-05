@@ -3000,6 +3000,66 @@ def test_SliceNdLayer_set_tag_on_size_tensor():
     })
 
 
+def test_SliceNdLayer_static_size_search_beams():
+  with make_scope() as session:
+    n_out = 5
+    n_batch = 3
+    max_seq_len = 10
+    config = Config({
+      "task": "search",
+      "debug_print_layer_output_template": True,
+      "extern_data": {
+        "data": {"dim": n_out},
+        "classes": {"dim": n_out, "sparse": True}
+      }})
+    net = TFNetwork(config=config, search_flag=True)
+    net.construct_from_dict({
+      "output": {
+        "class": "rec", "from": "data:data", "unit": {
+          "start": {"class": "reinterpret_data", "from": "prev:output", "set_sparse": False},
+          "slices": {"class": "slice_nd", "from": "base:data:data", "start": "start", "size": 2},  # [B,T,slice,D]
+          "slice_max": {"class": "reduce", "from": "slices", "mode": "max", "axes": "static:-2"},
+          "prob": {"class": "softmax", "from": "slice_max", "target": "classes", "loss": "ce"},
+          'output': {
+            'class': 'choice', 'target': "classes", 'beam_size': 3, 'from': "prob", "input_type": "prob",
+            "initial_output": 0}}}})
+    session.run(tf_compat.v1.global_variables_initializer())
+    output = net.layers["output"].output.get_placeholder_as_batch_major()
+    feed = make_feed_dict(net.extern_data.data.values(), n_batch=n_batch, n_time=max_seq_len, same_time=True)
+    output_t = session.run(output, feed_dict=feed)
+
+
+def test_SliceNdLayer_dyn_size_search_beams():
+  with make_scope() as session:
+    n_out = 5
+    n_batch = 3
+    max_seq_len = 10
+    config = Config({
+      "task": "search",
+      "debug_print_layer_output_template": True,
+      "extern_data": {
+        "data": {"dim": n_out},
+        "classes": {"dim": n_out, "sparse": True}
+      }})
+    net = TFNetwork(config=config, search_flag=True)
+    net.construct_from_dict({
+      "output": {
+        "class": "rec", "from": "data:data", "unit": {
+          "const1": {"class": "constant", "value": 1},
+          "start": {"class": "reinterpret_data", "from": "prev:output", "set_sparse": False},
+          "size": {"class": "combine", "from": ["const1", "start"], "kind": "add"},
+          "slices": {"class": "slice_nd", "from": "base:data:data", "start": "start", "size": "size"},  # [B,T,slice,D]
+          "slice_max": {"class": "reduce", "from": "slices", "mode": "max", "axes": "dyn:-1"},
+          "prob": {"class": "softmax", "from": "slice_max", "target": "classes", "loss": "ce"},
+          'output': {
+            'class': 'choice', 'target': "classes", 'beam_size': 3, 'from': "prob", "input_type": "prob",
+            "initial_output": 0}}}})
+    session.run(tf_compat.v1.global_variables_initializer())
+    output = net.layers["output"].output.get_placeholder_as_batch_major()
+    feed = make_feed_dict(net.extern_data.data.values(), n_batch=n_batch, n_time=max_seq_len, same_time=True)
+    output_t = session.run(output, feed_dict=feed)
+
+
 def test_WindowLayer_output_placeholder():
   with make_scope() as session:
     net = TFNetwork(extern_data=ExternData())
