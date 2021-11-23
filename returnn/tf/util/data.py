@@ -363,7 +363,8 @@ class DimensionTag(object):
     :return: whether this dim tag is of kind spatial
     :rtype: bool
     """
-    return self.kind == DimensionTag.Types.Spatial
+    # return self.kind == DimensionTag.Types.Spatial
+    return str(self.kind) == str(DimensionTag.Types.Spatial)
 
   def is_dim_known(self):
     """
